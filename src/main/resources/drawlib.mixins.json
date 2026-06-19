@@ -1,7 +1,7 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "sashwind.mc.plugin.drawlib.mixin",
+  "package": "sashwind.mc.mod.drawlib.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
   ],

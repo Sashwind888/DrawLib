@@ -11,13 +11,13 @@
   "environment": "client",
   "entrypoints": {
     "fabric-datagen": [
-      "sashwind.mc.plugin.drawlib.client.DrawlibDataGenerator"
+      "sashwind.mc.mod.drawlib.client.DrawlibDataGenerator"
     ],
     "client": [
-      "sashwind.mc.plugin.drawlib.client.DrawlibClient"
+      "sashwind.mc.mod.drawlib.client.DrawlibClient"
     ],
     "main": [
-      "sashwind.mc.plugin.drawlib.Drawlib"
+      "sashwind.mc.mod.drawlib.Drawlib"
     ]
   },
   "mixins": [

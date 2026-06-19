@@ -1,4 +1,4 @@
-package sashwind.mc.plugin.drawlib.client;
+package sashwind.mc.mod.drawlib.client;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
@@ -7,7 +7,7 @@ import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
-        import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
@@ -19,6 +19,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.system.MemoryUtil;
+import sashwind.mc.mod.drawlib.Drawlib;
 
 import java.util.Optional;
 import java.util.OptionalDouble;
@@ -28,7 +29,7 @@ public class lib {
 
 
     public static final RenderPipeline FILLED_THROUGH_WALLS = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
-            .withLocation(Identifier.fromNamespaceAndPath(Videoplayer.MOD_ID, "pipeline/debug_filled_box_through_walls"))
+            .withLocation(Identifier.fromNamespaceAndPath(Drawlib.MOD_ID, "pipeline/debug_filled_box_through_walls"))
             .withDepthStencilState(Optional.empty())
             .build()
     );
@@ -132,7 +133,7 @@ public class lib {
                 vertexBuffer.close();
             }
 
-            vertexBuffer = new MappableRingBuffer(() -> Videoplayer.MOD_ID + " example render pipeline", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_MAP_WRITE, vertexBufferSize);
+            vertexBuffer = new MappableRingBuffer(() -> Drawlib.MOD_ID + " example render pipeline", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_MAP_WRITE, vertexBufferSize);
         }
 
         // Copy vertex data into the vertex buffer
@@ -167,7 +168,7 @@ public class lib {
                 .writeTransform(RenderSystem.getModelViewMatrix(), COLOR_MODULATOR, MODEL_OFFSET, TEXTURE_MATRIX);
         try (RenderPass renderPass = RenderSystem.getDevice()
                 .createCommandEncoder()
-                .createRenderPass(() -> Videoplayer.MOD_ID + " example render pipeline rendering", client.getMainRenderTarget().getColorTextureView(), OptionalInt.empty(), client.getMainRenderTarget().getDepthTextureView(), OptionalDouble.empty())) {
+                .createRenderPass(() -> Drawlib.MOD_ID + " example render pipeline rendering", client.getMainRenderTarget().getColorTextureView(), OptionalInt.empty(), client.getMainRenderTarget().getDepthTextureView(), OptionalDouble.empty())) {
             renderPass.setPipeline(pipeline);
 
             RenderSystem.bindDefaultUniforms(renderPass);
