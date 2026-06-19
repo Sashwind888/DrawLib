@@ -10,6 +10,6 @@ import sashwind.mc.mod.drawlib.client.DrawlibClient;
 public class GameRendererMixin {
     @Inject(method = "close", at = @At("RETURN"))
     private void onGameRendererClose(CallbackInfo ci) {
-        DrawlibClient.getInstance().close();
+        //DrawlibClient.getInstance().close();
     }
 }

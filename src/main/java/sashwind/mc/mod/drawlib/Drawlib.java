@@ -3,7 +3,7 @@ package sashwind.mc.mod.drawlib;
 import net.fabricmc.api.ModInitializer;
 
 public class Drawlib implements ModInitializer {
-    public static String MOD_ID = "darwlib";
+    public static String MOD_ID = "drawlib";
     @Override
     public void onInitialize() {
     }
