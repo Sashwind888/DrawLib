@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "drawlib",
+  "version": "${version}",
+  "name": "DrawLib",
+  "description": "DrawLib",
+  "authors": [],
+  "contact": {},
+  "license": "unlicense",
+  "icon": "assets/drawlib/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-datagen": [
+      "sashwind.mc.plugin.drawlib.client.DrawlibDataGenerator"
+    ],
+    "client": [
+      "sashwind.mc.plugin.drawlib.client.DrawlibClient"
+    ],
+    "main": [
+      "sashwind.mc.plugin.drawlib.Drawlib"
+    ]
+  },
+  "mixins": [
+    "drawlib.mixins.json",
+    {
+      "config": "drawlib.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
