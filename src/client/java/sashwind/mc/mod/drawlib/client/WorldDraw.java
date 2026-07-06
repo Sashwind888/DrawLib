@@ -292,9 +292,8 @@ public class WorldDraw {
                 // 如果需要，也可以将异常写入日志文件
             }
             task = RENDER_TASKS.poll();
-            System.out.println("[RENDER_TASKS_FLUSH] Runed a new task.");
+            //System.out.println("[RENDER_TASKS_FLUSH] Runed a new task.");
         }
     }
-
 
 }
