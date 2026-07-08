@@ -21,6 +21,12 @@ loom {
     }
 }
 
+configurations {
+    client {
+        extendsFrom implementation
+    }
+}
+
 fabricApi {
     configureDataGeneration {
         client = true
