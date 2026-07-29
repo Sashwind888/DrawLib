@@ -90,31 +90,32 @@ public class WorldDraw {
     }
 
     public void close() {
-        // 直接关闭 lib（设置 closed=true，后续渲染回调将跳过）
+        // 立即设置 closed 标志，阻止后续渲染回调执行
         lib.closed = true;
 
-        // 立即释放 GPU 资源，不依赖 RENDER_TASKS_FLUSH（该回调在离开维度后可能不再触发）
-        try {
-            if (lib.vertexBuffer != null) { lib.vertexBuffer.close(); lib.vertexBuffer = null; }
-        } catch (Exception e) { System.err.println("[WorldDraw.close] vertexBuffer: " + e); }
-        try {
-            if (dynamicTexture != null) {
-                TextureManager tm = Minecraft.getInstance().getTextureManager();
-                tm.release(VIDEO_TEXTURE_ID);
-                dynamicTexture.close();
-                dynamicTexture = null;
-            }
-        } catch (Exception e) { System.err.println("[WorldDraw.close] dynamicTexture: " + e); }
-        try {
-            if (lib.WAYPOINT_TEXTURE != null) { lib.WAYPOINT_TEXTURE.close(); lib.WAYPOINT_TEXTURE = null; }
-        } catch (Exception e) { System.err.println("[WorldDraw.close] WAYPOINT_TEXTURE: " + e); }
-        clearVertices();
-        try {
-            lib.close();
-        } catch (Exception e) { System.err.println("[WorldDraw.close] lib: " + e); }
+        // GPU 资源必须由渲染线程释放，不能直接在 Netty/其他线程调用
+        // 提交到 RENDER_TASKS，由下一帧 RENDER_TASKS_FLUSH 在渲染线程执行
+        RENDER_TASKS.offer(() -> {
+            try {
+                if (lib.vertexBuffer != null) { lib.vertexBuffer.close(); lib.vertexBuffer = null; }
+            } catch (Exception e) { System.err.println("[WorldDraw.close] vertexBuffer: " + e); }
+            try {
+                if (dynamicTexture != null) {
+                    Minecraft.getInstance().getTextureManager().release(VIDEO_TEXTURE_ID);
+                    dynamicTexture.close();
+                    dynamicTexture = null;
+                }
+            } catch (Exception e) { System.err.println("[WorldDraw.close] dynamicTexture: " + e); }
+            try {
+                if (lib.WAYPOINT_TEXTURE != null) { lib.WAYPOINT_TEXTURE.close(); lib.WAYPOINT_TEXTURE = null; }
+            } catch (Exception e) { System.err.println("[WorldDraw.close] WAYPOINT_TEXTURE: " + e); }
+            try {
+                lib.close();
+            } catch (Exception e) { System.err.println("[WorldDraw.close] lib: " + e); }
+        });
 
-        // 清空待处理队列，防止残留任务持有已关闭对象的引用
-        RENDER_TASKS.clear();
+        // 非 GPU 资源可立即清理
+        clearVertices();
     }
 
     // ──────────────────────────────────────────────
