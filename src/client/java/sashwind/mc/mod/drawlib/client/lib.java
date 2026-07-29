@@ -43,6 +43,7 @@ public class lib {
     TopologyCompat VFM;
     public ArrayList<Vertex> vertices = new ArrayList<>();
     public AbstractTexture WAYPOINT_TEXTURE;
+    private Identifier waypointTextureId; // 保存 ID 以便 close() 中从 TextureManager 释放
     public RenderPipeline FILLED_THROUGH_WALLS;
     public WaypointRenderState waypointState;
 
@@ -117,10 +118,10 @@ public class lib {
         if (closed) return;
         ensureOverlayWhite();
         if (WAYPOINT_TEXTURE == null) {
-            Identifier id = Identifier.fromNamespaceAndPath(MOD_ID, "_placeholder" + PLACEHOLDER_COUNTER.getAndIncrement());
+            waypointTextureId = Identifier.fromNamespaceAndPath(MOD_ID, "_placeholder" + PLACEHOLDER_COUNTER.getAndIncrement());
             TextureManager textureManager = Minecraft.getInstance().getTextureManager();
             DynamicTexture dt = new DynamicTexture(MOD_ID + ".placeholder", 1, 1, true);
-            textureManager.register(id, dt);
+            textureManager.register(waypointTextureId, dt);
             NativeImage img = createPlaceholderImage(1, 1);
             dt.setPixels(img);
             dt.upload();
@@ -200,11 +201,13 @@ public class lib {
 
         if (closed) return;
         GpuBuffer indices; IndexType indexType;
+        boolean ownsIndexBuffer = false; // 标记是否需要释放索引缓冲区
         if (VFM.isQuads()) {
             builtBuffer.sortQuads(ALLOCATOR, RenderSystem.getProjectionType().vertexSorting());
             indices = RenderSystem.getDevice().createBuffer(
                     () -> "immediate_index", GpuBuffer.USAGE_INDEX, builtBuffer.indexBuffer());
             indexType = drawParameters.indexType();
+            ownsIndexBuffer = true;
         } else if (VFM == TopologyCompat.LINES) {
             int vc2 = drawParameters.vertexCount();
             ByteBuffer idxBuffer = MemoryUtil.memAlloc(vc2 * 2);
@@ -214,6 +217,7 @@ public class lib {
                     () -> "immediate_line_index", GpuBuffer.USAGE_INDEX, idxBuffer);
             indexType = IndexType.SHORT;
             MemoryUtil.memFree(idxBuffer);
+            ownsIndexBuffer = true;
         } else {
             RenderSystem.AutoStorageIndexBuffer shapeIndexBuffer =
                     RenderSystem.getSequentialBuffer(toPrimitiveTopology(VFM));
@@ -245,6 +249,10 @@ public class lib {
         } catch (Exception e) {
             LOGGER.warning("[draw] render pass failed: " + e);
         }
+        // 释放每帧创建的索引缓冲区（Quads/Lines 路径），避免 GPU VRAM 泄露
+        if (ownsIndexBuffer) {
+            indices.close();
+        }
         builtBuffer.close();
         if (vertexBuffer != null) vertexBuffer.rotate();
     }
@@ -274,8 +282,28 @@ public class lib {
         if (vertexBuffer != null) { vertexBuffer.close(); vertexBuffer = null; }
         try { if (ALLOCATOR != null) ALLOCATOR.close(); } catch (Exception e) {}
         if (vertices != null) vertices.clear();
+        // 从 TextureManager 注销占位纹理
+        if (waypointTextureId != null && WAYPOINT_TEXTURE != null) {
+            try {
+                Minecraft.getInstance().getTextureManager().release(waypointTextureId);
+            } catch (Exception e) { LOGGER.warning("release waypoint texture failed: " + e); }
+            WAYPOINT_TEXTURE.close();
+        }
         WAYPOINT_TEXTURE = null;
+        waypointTextureId = null;
         buffer = null;
+    }
+
+    /** 全局清理：在 CLIENT_STOPPING 时调用，释放静态 OVERLAY_WHITE */
+    public static void cleanupStatics() {
+        if (OVERLAY_WHITE != null) {
+            try {
+                Minecraft.getInstance().getTextureManager()
+                        .release(Identifier.fromNamespaceAndPath(MOD_ID, "_overlay_white"));
+            } catch (Exception e) { /* ignore */ }
+            OVERLAY_WHITE.close();
+            OVERLAY_WHITE = null;
+        }
     }
 
 }
