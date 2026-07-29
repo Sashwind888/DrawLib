@@ -48,6 +48,7 @@ public class lib {
     }
     public ArrayList<Vertex> vertices = new ArrayList<>();
     public AbstractTexture WAYPOINT_TEXTURE;
+    private Identifier waypointTextureId;
     public RenderPipeline FILLED_THROUGH_WALLS;
     public WaypointRenderState waypointState;
 
@@ -113,10 +114,10 @@ public class lib {
         // 纹理上传必须在 render pass 之外完成
         ensureOverlayWhite();
         if (WAYPOINT_TEXTURE == null) {
-            Identifier id = Identifier.fromNamespaceAndPath(MOD_ID, "_placeholder" + PLACEHOLDER_COUNTER.getAndIncrement());
+            waypointTextureId = Identifier.fromNamespaceAndPath(MOD_ID, "_placeholder" + PLACEHOLDER_COUNTER.getAndIncrement());
             TextureManager textureManager = Minecraft.getInstance().getTextureManager();
             DynamicTexture dt = new DynamicTexture(MOD_ID + ".placeholder", 1, 1, true);
-            textureManager.register(id, dt);
+            textureManager.register(waypointTextureId, dt);
             NativeImage img = createPlaceholderImage(1,1);
             dt.setPixels(img);
             dt.upload();
@@ -247,8 +248,21 @@ public class lib {
         if (vertexBuffer != null) { vertexBuffer.close(); vertexBuffer = null; }
         try { if (ALLOCATOR != null) ALLOCATOR.close(); } catch (Exception e) {}
         if (vertices != null) vertices.clear();
+        if (waypointTextureId != null && WAYPOINT_TEXTURE != null) {
+            try { Minecraft.getInstance().getTextureManager().release(waypointTextureId); } catch (Exception e) {}
+            WAYPOINT_TEXTURE.close();
+        }
         WAYPOINT_TEXTURE = null;
+        waypointTextureId = null;
         buffer = null;
+    }
+
+    public static void cleanupStatics() {
+        if (OVERLAY_WHITE != null) {
+            try { Minecraft.getInstance().getTextureManager().release(Identifier.fromNamespaceAndPath(MOD_ID, "_overlay_white")); } catch (Exception e) {}
+            OVERLAY_WHITE.close();
+            OVERLAY_WHITE = null;
+        }
     }
 
 }
