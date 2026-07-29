@@ -91,13 +91,19 @@ public class WorldDraw {
     }
 
     public void close() {
+        // 立即设置 closed 标志，阻止后续渲染回调执行新操作
         lib.closed = true;
-        try { if (lib.vertexBuffer != null) { lib.vertexBuffer.close(); lib.vertexBuffer = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] vertexBuffer: " + e); }
-        try { if (dynamicTexture != null) { Minecraft.getInstance().getTextureManager().release(VIDEO_TEXTURE_ID); dynamicTexture.close(); dynamicTexture = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] dynamicTexture: " + e); }
-        try { if (lib.WAYPOINT_TEXTURE != null) { lib.WAYPOINT_TEXTURE.close(); lib.WAYPOINT_TEXTURE = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] WAYPOINT_TEXTURE: " + e); }
+
+        // GPU 资源必须由渲染线程释放，提交到 RENDER_TASKS 队列
+        RENDER_TASKS.offer(() -> {
+            try { if (lib.vertexBuffer != null) { lib.vertexBuffer.close(); lib.vertexBuffer = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] vertexBuffer: " + e); }
+            try { if (dynamicTexture != null) { Minecraft.getInstance().getTextureManager().release(VIDEO_TEXTURE_ID); dynamicTexture.close(); dynamicTexture = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] dynamicTexture: " + e); }
+            try { if (lib.WAYPOINT_TEXTURE != null) { lib.WAYPOINT_TEXTURE.close(); lib.WAYPOINT_TEXTURE = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] WAYPOINT_TEXTURE: " + e); }
+            try { lib.close(); } catch (Exception e) { System.err.println("[WorldDraw.close] lib: " + e); }
+        });
+
+        // 非 GPU 操作可立即执行
         clearVertices();
-        try { lib.close(); } catch (Exception e) { System.err.println("[WorldDraw.close] lib: " + e); }
-        RENDER_TASKS.clear();
     }
 
     // ──────────────────────────────────────────────
