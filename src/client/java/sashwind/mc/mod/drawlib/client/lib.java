@@ -97,8 +97,10 @@ public class lib {
             FILLED_THROUGH_WALLS = pipeline;
             LOGGER.info("[ctor] Line pipeline built: " + VFM + " loc=" + FILLED_THROUGH_WALLS.getLocation());
         } else {
-            FILLED_THROUGH_WALLS = RenderPipelines.ENTITY_TRANSLUCENT_EMISSIVE;
-            LOGGER.info("[ctor] Using ENTITY_TRANSLUCENT_EMISSIVE for " + VFM);
+            // 不透光管线：无混合 + 写深度（云/后渲染物被深度挡住），保留剪影+面光照
+            // 自发光由 setUv2(255,255) 全亮 lightmap 提供（sample_lightmap 采样最亮格）
+            FILLED_THROUGH_WALLS = RenderPipelines.ENTITY_CUTOUT;
+            LOGGER.info("[ctor] Using ENTITY_CUTOUT for " + VFM);
         }
     }
 
