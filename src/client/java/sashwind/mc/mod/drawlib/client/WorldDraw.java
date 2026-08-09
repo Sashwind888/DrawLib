@@ -60,10 +60,14 @@ public class WorldDraw {
             NativeImage nativeImage = null;
             try {
                 nativeImage = new NativeImage(fmt, w, h, false);
-                int[] pixels = nativeImage.getPixels();
-                ByteBuffer.wrap(rawPixels).asIntBuffer().get(pixels);
-                long dstPtr = nativeImage.getPointer();
-                org.lwjgl.system.MemoryUtil.memByteBuffer(dstPtr, size).put(rawPixels);
+                // 单次 memCopy（原先 int[] 中转拷贝完全冗余：拷完即丢，从未使用）
+                ByteBuffer dst = org.lwjgl.system.MemoryUtil.memByteBuffer(nativeImage.getPointer(), size);
+                dst.put(rawPixels);
+                // 批量强制 alpha=255（mpv rgb0 的 alpha 是垃圾值；int 批量比逐字节快 4 倍）
+                dst.rewind();
+                IntBuffer ib = dst.asIntBuffer();
+                int n = w * h;
+                for (int i = 0; i < n; i++) ib.put(i, ib.get(i) | 0xFF000000);
                 ensureTexture(w, h);
                 dynamicTexture.setPixels(nativeImage);
                 dynamicTexture.upload();
