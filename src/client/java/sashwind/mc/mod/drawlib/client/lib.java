@@ -93,7 +93,7 @@ public class lib {
             FILLED_THROUGH_WALLS = RenderPipelines.register(pipeline);
         } else {
             // 面片模式（TRIANGLES/QUADS）：直接使用原版管线，Iris 原生兼容
-            FILLED_THROUGH_WALLS = RenderPipelines.ENTITY_TRANSLUCENT_EMISSIVE;
+            FILLED_THROUGH_WALLS = RenderPipelines.ENTITY_CUTOUT;
         }
     }
 
