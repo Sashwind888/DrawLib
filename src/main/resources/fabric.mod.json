@@ -3,10 +3,10 @@
   "id": "drawlib",
   "version": "${version}",
   "name": "DrawLib",
-  "description": "DrawLib",
-  "authors": [],
+  "description": "一个用于在世界当中渲染的简易库",
+  "authors": ["sashwind"],
   "contact": {},
-  "license": "unlicense",
+  "license": "AGPL-v3",
   "icon": "assets/drawlib/icon.png",
   "environment": "client",
   "entrypoints": {
