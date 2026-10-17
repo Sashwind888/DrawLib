@@ -1,9 +1,8 @@
 package sashwind.mc.mod.drawlib.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
@@ -32,11 +31,10 @@ public class WorldDraw {
     }
 
     public void init() {
-        WorldRenderEvents.END_EXTRACTION.register(lib::extractWaypoint);
         // 先 draw（用上帧已上传的纹理），再 flush（为本帧 upload 下帧使用）
         // Blaze3D 不允许同帧创建+使用 GPU 纹理
-        WorldRenderEvents.END_MAIN.register(lib::renderAndDrawWaypoint);
-        WorldRenderEvents.END_MAIN.register(this::RENDER_TASKS_FLUSH);
+        WorldRenderEvents.AFTER_TRANSLUCENT.register(lib::renderAndDrawWaypoint);
+        WorldRenderEvents.AFTER_TRANSLUCENT.register(this::RENDER_TASKS_FLUSH);
     }
 
     public void addVertices(float x, float y, float z, int light, float u, float v, float r, float g, float b, float a) {

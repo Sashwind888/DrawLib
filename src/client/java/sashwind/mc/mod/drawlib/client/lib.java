@@ -8,8 +8,7 @@ import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldExtractionContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -84,7 +83,7 @@ public class lib {
         }
     }
 
-    public void extractWaypoint(WorldExtractionContext context) {
+    public void extractWaypoint() {
         if (closed) return;
         waypointState = new WaypointRenderState(POSx, POSy, POSz, 1f, 1f, 1f, 1f);
     }
@@ -98,6 +97,7 @@ public class lib {
 
     public void renderAndDrawWaypoint(WorldRenderContext context) {
         if (closed) return;
+        extractWaypoint();
         // 纹理上传必须在 render pass 之外完成
         ensureOverlayWhite();
         if (WAYPOINT_TEXTURE == null) {
@@ -128,8 +128,8 @@ public class lib {
             buffer = null;
             return;
         }
-        PoseStack matrices = context.matrices();
-        Vec3 camera = context.worldState().cameraRenderState.pos;
+        PoseStack matrices = context.matrixStack();
+        Vec3 camera = context.camera().getPosition();
         matrices.pushPose();
         matrices.translate(-camera.x, -camera.y, -camera.z);
         buffer = new BufferBuilder(ALLOCATOR, toMode(VFM), FILLED_THROUGH_WALLS.getVertexFormat());
@@ -222,7 +222,7 @@ public class lib {
         client.setScreen(screen);
     }
 
-    public record WaypointRenderState(int x, int y, int z, float r, float g, float b, float a) {}
+    public record WaypointRenderState(int x, int y, int z, float r, float b, float g, float a) {}
 
     private NativeImage createPlaceholderImage(int width, int height) {
         NativeImage img = new NativeImage(NativeImage.Format.RGBA, width, height, false);
