@@ -11,8 +11,8 @@ import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.vertex.*;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldExtractionContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -34,6 +34,8 @@ import java.util.OptionalInt;
 import java.util.logging.Logger;
 
 public class lib {
+    private static final Logger LOGGER = Logger.getLogger("FFCraft-lib");
+
     boolean closed = false;
     int POSx, POSy, POSz;
     TopologyCompat VFM;
@@ -76,28 +78,16 @@ public class lib {
     public lib(int x, int y, int z, TopologyCompat topo) {
         POSx = x; POSy = y; POSz = z;
         VFM = topo;
-        VertexFormat.Mode mode = toMode(VFM);
 
+        // 使用原版静态管线以保持光影兼容
         if (VFM.isLine()) {
-            // 线框模式：使用自定义管线（NO_OVERLAY + NO_FOG），原版管线不支持 line 拓扑
-            // 仅在放置参考点时使用，此时通常无光影
-            RenderPipeline pipeline = RenderPipeline.builder(RenderPipelines.ENTITY_EMISSIVE_SNIPPET)
-                    .withLocation(Identifier.fromNamespaceAndPath(MOD_ID, "pipeline/entity_translucent_emissive"))
-                    .withVertexFormat(DefaultVertexFormat.ENTITY, mode)
-                    .withShaderDefine("NO_OVERLAY")
-                    .withShaderDefine("NO_FOG")
-                    .withSampler("Sampler0")
-                    .withSampler("Sampler1")
-                    .withSampler("Sampler2")
-                    .build();
-            FILLED_THROUGH_WALLS = RenderPipelines.register(pipeline);
+            FILLED_THROUGH_WALLS = RenderPipelines.LINES;
         } else {
-            // 面片模式（TRIANGLES/QUADS）：直接使用原版管线，Iris 原生兼容
             FILLED_THROUGH_WALLS = RenderPipelines.ENTITY_CUTOUT;
         }
     }
 
-    public void extractWaypoint(LevelExtractionContext context) {
+    public void extractWaypoint(WorldExtractionContext context) {
         if (closed) return;
         waypointState = new WaypointRenderState(POSx, POSy, POSz, 1f, 1f, 1f, 1f);
     }
@@ -109,7 +99,7 @@ public class lib {
     public BufferBuilder buffer;
     public MappableRingBuffer vertexBuffer;
 
-    public void renderAndDrawWaypoint(LevelRenderContext context) {
+    public void renderAndDrawWaypoint(WorldRenderContext context) {
         if (closed) return;
         // 纹理上传必须在 render pass 之外完成
         ensureOverlayWhite();
@@ -128,7 +118,7 @@ public class lib {
         drawFilledThroughWalls(Minecraft.getInstance(), FILLED_THROUGH_WALLS);
     }
 
-    public void renderWaypoint(LevelRenderContext context) {
+    public void renderWaypoint(WorldRenderContext context) {
         if (closed) return;
         try {
             ALLOCATOR.clear();
@@ -141,8 +131,8 @@ public class lib {
             buffer = null;
             return;
         }
-        PoseStack matrices = context.poseStack();
-        Vec3 camera = context.levelState().cameraRenderState.pos;
+        PoseStack matrices = context.matrices();
+        Vec3 camera = context.worldState().cameraRenderState.pos;
         matrices.pushPose();
         matrices.translate(-camera.x, -camera.y, -camera.z);
         buffer = new BufferBuilder(ALLOCATOR, toMode(VFM), FILLED_THROUGH_WALLS.getVertexFormat());
@@ -172,37 +162,44 @@ public class lib {
         if (vertexBuffer != null) vertexBuffer.rotate();
     }
 
-    public GpuBuffer upload(MeshData.DrawState drawParameters, VertexFormat format, MeshData builtBuffer) {
+    private GpuBuffer upload(MeshData.DrawState drawParameters, VertexFormat format, MeshData builtBuffer) {
         int vertexBufferSize = drawParameters.vertexCount() * format.getVertexSize();
         int bufferCapacity = vertexBufferSize + (vertexBufferSize >> 2);
         if (vertexBuffer == null || vertexBuffer.size() < vertexBufferSize) {
             if (vertexBuffer != null) vertexBuffer.close();
-            vertexBuffer = new MappableRingBuffer(() -> MOD_ID + " example render pipeline", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_MAP_WRITE, bufferCapacity);
+            vertexBuffer = new MappableRingBuffer(() -> MOD_ID + " example render pipeline",
+                    GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_MAP_WRITE, bufferCapacity);
         }
+        GpuBuffer vertices = vertexBuffer.currentBuffer();
         CommandEncoder commandEncoder = RenderSystem.getDevice().createCommandEncoder();
-        try (GpuBuffer.MappedView mappedView = commandEncoder.mapBuffer(vertexBuffer.currentBuffer().slice(0, builtBuffer.vertexBuffer().remaining()), false, true)) {
+        try (var mappedView = commandEncoder.mapBuffer(
+                vertices.slice(0, builtBuffer.vertexBuffer().remaining()), false, true)) {
             MemoryUtil.memCopy(builtBuffer.vertexBuffer(), mappedView.data());
         }
-        return vertexBuffer.currentBuffer();
+        return vertices;
     }
 
-    public void draw(Minecraft client, RenderPipeline pipeline, MeshData builtBuffer, MeshData.DrawState drawParameters, GpuBuffer verts, VertexFormat format) {
+    private void draw(Minecraft client, RenderPipeline pipeline, MeshData builtBuffer, MeshData.DrawState drawParameters, GpuBuffer vertices, VertexFormat format) {
         if (closed) return;
-        GpuBuffer indices; VertexFormat.IndexType indexType;
-        if (VFM.isQuads()) {
+        GpuBuffer indices;
+        VertexFormat.IndexType indexType;
+        if (drawParameters.mode() == VertexFormat.Mode.QUADS) {
             builtBuffer.sortQuads(ALLOCATOR, RenderSystem.getProjectionType().vertexSorting());
-            indices = pipeline.getVertexFormat().uploadImmediateIndexBuffer(builtBuffer.indexBuffer());
-            indexType = builtBuffer.drawState().indexType();
+            indices = RenderSystem.getDevice().createBuffer(
+                    () -> "immediate_index", GpuBuffer.USAGE_INDEX, builtBuffer.indexBuffer());
+            indexType = drawParameters.indexType();
         } else if (VFM == TopologyCompat.LINES) {
-            int vertexCount = drawParameters.vertexCount();
-            ByteBuffer idxBuffer = MemoryUtil.memAlloc(vertexCount * 2);
-            for (int i = 0; i < vertexCount; i++) idxBuffer.putShort((short) i);
+            int vc = drawParameters.vertexCount();
+            ByteBuffer idxBuffer = MemoryUtil.memAlloc(vc * 2);
+            for (int i = 0; i < vc; i++) idxBuffer.putShort((short) i);
             idxBuffer.flip();
-            indices = pipeline.getVertexFormat().uploadImmediateIndexBuffer(idxBuffer);
+            indices = RenderSystem.getDevice().createBuffer(
+                    () -> "immediate_line_index", GpuBuffer.USAGE_INDEX, idxBuffer);
             indexType = VertexFormat.IndexType.SHORT;
             MemoryUtil.memFree(idxBuffer);
         } else {
-            RenderSystem.AutoStorageIndexBuffer shapeIndexBuffer = RenderSystem.getSequentialBuffer(toMode(VFM));
+            RenderSystem.AutoStorageIndexBuffer shapeIndexBuffer =
+                    RenderSystem.getSequentialBuffer(drawParameters.mode());
             indices = shapeIndexBuffer.getBuffer(drawParameters.indexCount());
             indexType = shapeIndexBuffer.type();
         }
@@ -214,17 +211,21 @@ public class lib {
                     AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE,
                     FilterMode.NEAREST, FilterMode.NEAREST, false);
             renderPass.bindTexture("Sampler0", WAYPOINT_TEXTURE.getTextureView(), pointSampler);
-            // lightmap: 用 Minecraft 的真实光照贴图（Iris ENTITIES_ALPHA 必须）
-            renderPass.bindTexture("Sampler2", client.gameRenderer.lightmap(), pointSampler);
+            // lightmap: 用 Minecraft 的真实光照贴图
+            renderPass.bindTexture("Sampler2", client.gameRenderer.lightTexture().getTextureView(), pointSampler);
             renderPass.bindTexture("Sampler1", OVERLAY_WHITE.getTextureView(), pointSampler);
             renderPass.setPipeline(pipeline);
             RenderSystem.bindDefaultUniforms(renderPass);
             renderPass.setUniform("DynamicTransforms", dynamicTransforms);
-            renderPass.setVertexBuffer(0, verts);
+            renderPass.setVertexBuffer(0, vertices);
             renderPass.setIndexBuffer(indices, indexType);
-            renderPass.drawIndexed(0, 0, drawParameters.indexCount(), 1);
+            renderPass.drawIndexed(drawParameters.indexCount(), 1, 0, 0);
         }
         builtBuffer.close();
+    }
+
+    public static void setScreenCompat(Minecraft client, net.minecraft.client.gui.screens.Screen screen) {
+        client.setScreen(screen);
     }
 
     public record WaypointRenderState(int x, int y, int z, float r, float g, float b, float a) {}
