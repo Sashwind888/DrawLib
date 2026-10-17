@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
@@ -24,10 +24,10 @@ public class WorldDraw {
     private static final java.util.concurrent.atomic.AtomicInteger TEXTURE_ID_COUNTER =
             new java.util.concurrent.atomic.AtomicInteger(0);
     private static final String MOD_ID = "ffcraft";
-    private final Identifier VIDEO_TEXTURE_ID;
+    private final ResourceLocation VIDEO_TEXTURE_ID;
 
     public WorldDraw(int x, int y, int z, TopologyCompat topo) {
-        VIDEO_TEXTURE_ID = Identifier.fromNamespaceAndPath(MOD_ID, "stream_" + TEXTURE_ID_COUNTER.getAndIncrement());
+        VIDEO_TEXTURE_ID = ResourceLocation.fromNamespaceAndPath(MOD_ID, "stream_" + TEXTURE_ID_COUNTER.getAndIncrement());
         lib = new lib(x, y, z, topo);
     }
 

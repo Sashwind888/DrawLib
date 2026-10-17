@@ -7,20 +7,17 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.AddressMode;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.vertex.*;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldExtractionContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -50,7 +47,7 @@ public class lib {
     }
     public ArrayList<Vertex> vertices = new ArrayList<>();
     public AbstractTexture WAYPOINT_TEXTURE;
-    private Identifier waypointTextureId;
+    private ResourceLocation waypointTextureId;
     public RenderPipeline FILLED_THROUGH_WALLS;
     public WaypointRenderState waypointState;
 
@@ -64,7 +61,7 @@ public class lib {
     private static void ensureOverlayWhite() {
         if (OVERLAY_WHITE != null) return;
         TextureManager tm = Minecraft.getInstance().getTextureManager();
-        Identifier id = Identifier.fromNamespaceAndPath(MOD_ID, "_overlay_white");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(MOD_ID, "_overlay_white");
         DynamicTexture dt = new DynamicTexture(MOD_ID + ".overlay", 1, 1, true);
         tm.register(id, dt);
         NativeImage img = new NativeImage(NativeImage.Format.RGBA, 1, 1, false);
@@ -104,7 +101,7 @@ public class lib {
         // 纹理上传必须在 render pass 之外完成
         ensureOverlayWhite();
         if (WAYPOINT_TEXTURE == null) {
-            waypointTextureId = Identifier.fromNamespaceAndPath(MOD_ID, "_placeholder" + PLACEHOLDER_COUNTER.getAndIncrement());
+            waypointTextureId = ResourceLocation.fromNamespaceAndPath(MOD_ID, "_placeholder" + PLACEHOLDER_COUNTER.getAndIncrement());
             TextureManager textureManager = Minecraft.getInstance().getTextureManager();
             DynamicTexture dt = new DynamicTexture(MOD_ID + ".placeholder", 1, 1, true);
             textureManager.register(waypointTextureId, dt);
@@ -204,16 +201,13 @@ public class lib {
             indexType = shapeIndexBuffer.type();
         }
         GpuBufferSlice dynamicTransforms = RenderSystem.getDynamicUniforms()
-                .writeTransform(RenderSystem.getModelViewMatrix(), COLOR_MODULATOR, MODEL_OFFSET, TEXTURE_MATRIX);
+                .writeTransform(RenderSystem.getModelViewMatrix(), COLOR_MODULATOR, MODEL_OFFSET, TEXTURE_MATRIX, 0.0f);
         try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder()
                 .createRenderPass(() -> MOD_ID + " example render pipeline rendering", client.getMainRenderTarget().getColorTextureView(), OptionalInt.empty(), client.getMainRenderTarget().getDepthTextureView(), OptionalDouble.empty())) {
-            GpuSampler pointSampler = RenderSystem.getSamplerCache().getSampler(
-                    AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE,
-                    FilterMode.NEAREST, FilterMode.NEAREST, false);
-            renderPass.bindTexture("Sampler0", WAYPOINT_TEXTURE.getTextureView(), pointSampler);
+            renderPass.bindSampler("Sampler0", WAYPOINT_TEXTURE.getTextureView());
             // lightmap: 用 Minecraft 的真实光照贴图
-            renderPass.bindTexture("Sampler2", client.gameRenderer.lightTexture().getTextureView(), pointSampler);
-            renderPass.bindTexture("Sampler1", OVERLAY_WHITE.getTextureView(), pointSampler);
+            renderPass.bindSampler("Sampler2", client.gameRenderer.lightTexture().getTextureView());
+            renderPass.bindSampler("Sampler1", OVERLAY_WHITE.getTextureView());
             renderPass.setPipeline(pipeline);
             RenderSystem.bindDefaultUniforms(renderPass);
             renderPass.setUniform("DynamicTransforms", dynamicTransforms);
@@ -260,7 +254,7 @@ public class lib {
 
     public static void cleanupStatics() {
         if (OVERLAY_WHITE != null) {
-            try { Minecraft.getInstance().getTextureManager().release(Identifier.fromNamespaceAndPath(MOD_ID, "_overlay_white")); } catch (Exception e) {}
+            try { Minecraft.getInstance().getTextureManager().release(ResourceLocation.fromNamespaceAndPath(MOD_ID, "_overlay_white")); } catch (Exception e) {}
             OVERLAY_WHITE.close();
             OVERLAY_WHITE = null;
         }
