@@ -1,18 +1,19 @@
 package sashwind.mc.mod.drawlib.client;
 
-import com.mojang.blaze3d.IndexType;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.AddressMode;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.vertex.*;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.pipeline.IndexType;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.textures.AddressMode;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
@@ -85,20 +86,11 @@ public class lib {
         POSx = x; POSy = y; POSz = z;
         VFM = topo;
 
+        // 不自定义构造管线，全部使用原版已有的静态管线以兼容光影
         if (VFM.isLine()) {
-            PrimitiveTopology pt = toPrimitiveTopology(VFM);
-            RenderPipeline pipeline = RenderPipeline.builder(RenderPipelines.ENTITY_EMISSIVE_SNIPPET)
-                    .withLocation(Identifier.fromNamespaceAndPath(MOD_ID, "pipeline/entity_translucent_emissive"))
-                    .withVertexBinding(0, DefaultVertexFormat.ENTITY)
-                    .withPrimitiveTopology(pt)
-                    .withShaderDefine("NO_OVERLAY")
-                    .withShaderDefine("NO_FOG")
-                    .build();
-            FILLED_THROUGH_WALLS = pipeline;
-            LOGGER.info("[ctor] Line pipeline built: " + VFM + " loc=" + FILLED_THROUGH_WALLS.getLocation());
+            FILLED_THROUGH_WALLS = RenderPipelines.LINES;
+            LOGGER.info("[ctor] Using RenderPipelines.LINES for " + VFM);
         } else {
-            // 不透光管线：无混合 + 写深度（云/后渲染物被深度挡住），保留剪影+面光照
-            // 自发光由 setUv2(255,255) 全亮 lightmap 提供（sample_lightmap 采样最亮格）
             FILLED_THROUGH_WALLS = RenderPipelines.ENTITY_CUTOUT;
             LOGGER.info("[ctor] Using ENTITY_CUTOUT for " + VFM);
         }
@@ -238,10 +230,10 @@ public class lib {
             GpuSampler pointSampler = RenderSystem.getSamplerCache().getSampler(
                     AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE,
                     FilterMode.NEAREST, FilterMode.NEAREST, false);
-            renderPass.bindTexture("Sampler0", WAYPOINT_TEXTURE.getTextureView(), pointSampler);
-            renderPass.bindTexture("Sampler2", client.gameRenderer.lightmap(), pointSampler);
-            renderPass.bindTexture("Sampler1", OVERLAY_WHITE.getTextureView(), pointSampler);
-            renderPass.setPipeline(pipeline);
+            renderPass.setUniform("Sampler0", WAYPOINT_TEXTURE.getTextureView(), pointSampler);
+            renderPass.setUniform("Sampler2", client.gameRenderer.lightmap(), pointSampler);
+            renderPass.setUniform("Sampler1", OVERLAY_WHITE.getTextureView(), pointSampler);
+            renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
             RenderSystem.bindDefaultUniforms(renderPass);
             renderPass.setUniform("DynamicTransforms", dynamicTransforms);
             renderPass.setVertexBuffer(0, verts.slice());
