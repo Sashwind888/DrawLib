@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.ResourceLocation;
 
+import java.lang.reflect.Field;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
@@ -42,6 +43,39 @@ public class WorldDraw {
         lib.vertices.add(new Vertex(x, y, z, r, g, b, a, u, v, l, 0, 1, 0));
     }
 
+    private static final Field NATIVE_IMAGE_PIXELS_FIELD;
+    static {
+        Field f = null;
+        try {
+            f = NativeImage.class.getDeclaredField("pixels");
+            f.setAccessible(true);
+        } catch (Throwable t1) {
+            try {
+                // intermediary 混淆名兼容
+                f = NativeImage.class.getDeclaredField("field_4988");
+                f.setAccessible(true);
+            } catch (Throwable t2) {
+                for (Field field : NativeImage.class.getDeclaredFields()) {
+                    if (field.getType() == long.class && !java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                        field.setAccessible(true);
+                        f = field;
+                        break;
+                    }
+                }
+            }
+        }
+        NATIVE_IMAGE_PIXELS_FIELD = f;
+    }
+
+    private static long getNativeImagePointer(NativeImage img) {
+        if (NATIVE_IMAGE_PIXELS_FIELD != null) {
+            try {
+                return NATIVE_IMAGE_PIXELS_FIELD.getLong(img);
+            } catch (Throwable ignored) {}
+        }
+        return 0L;
+    }
+
     public void clearVertices() { lib.vertices.clear(); }
 
     // ──────────────────────────────────────────────
@@ -49,23 +83,26 @@ public class WorldDraw {
     // ──────────────────────────────────────────────
     public void setTexture(int w, int h, NativeImage image) {
         int size = w * h * 4;
-        long srcPtr = image.getPointer();
+        long srcPtr = getNativeImagePointer(image);
         NativeImage.Format fmt = image.format();
         byte[] rawPixels = new byte[size];
-        org.lwjgl.system.MemoryUtil.memByteBuffer(srcPtr, size).get(rawPixels);
+        if (srcPtr != 0L) {
+            org.lwjgl.system.MemoryUtil.memByteBuffer(srcPtr, size).get(rawPixels);
+        }
 
         RENDER_TASKS.offer(() -> {
             NativeImage nativeImage = null;
             try {
                 nativeImage = new NativeImage(fmt, w, h, false);
-                // 单次 memCopy（原先 int[] 中转拷贝完全冗余：拷完即丢，从未使用）
-                ByteBuffer dst = org.lwjgl.system.MemoryUtil.memByteBuffer(nativeImage.getPointer(), size);
-                dst.put(rawPixels);
-                // 批量强制 alpha=255（mpv rgb0 的 alpha 是垃圾值；int 批量比逐字节快 4 倍）
-                dst.rewind();
-                IntBuffer ib = dst.asIntBuffer();
-                int n = w * h;
-                for (int i = 0; i < n; i++) ib.put(i, ib.get(i) | 0xFF000000);
+                long dstPtr = getNativeImagePointer(nativeImage);
+                if (dstPtr != 0L) {
+                    ByteBuffer dst = org.lwjgl.system.MemoryUtil.memByteBuffer(dstPtr, size);
+                    dst.put(rawPixels);
+                    dst.rewind();
+                    IntBuffer ib = dst.asIntBuffer();
+                    int n = w * h;
+                    for (int i = 0; i < n; i++) ib.put(i, ib.get(i) | 0xFF000000);
+                }
                 ensureTexture(w, h);
                 dynamicTexture.setPixels(nativeImage);
                 dynamicTexture.upload();
@@ -98,7 +135,7 @@ public class WorldDraw {
 
         // GPU 资源必须由渲染线程释放，提交到 RENDER_TASKS 队列
         RENDER_TASKS.offer(() -> {
-            try { if (lib.vertexBuffer != null) { lib.vertexBuffer.close(); lib.vertexBuffer = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] vertexBuffer: " + e); }
+            try { if (lib.vertexBuffer instanceof AutoCloseable ac) { ac.close(); lib.vertexBuffer = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] vertexBuffer: " + e); }
             try { if (dynamicTexture != null) { Minecraft.getInstance().getTextureManager().release(VIDEO_TEXTURE_ID); dynamicTexture.close(); dynamicTexture = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] dynamicTexture: " + e); }
             try { if (lib.WAYPOINT_TEXTURE != null) { lib.WAYPOINT_TEXTURE.close(); lib.WAYPOINT_TEXTURE = null; } } catch (Exception e) { System.err.println("[WorldDraw.close] WAYPOINT_TEXTURE: " + e); }
             try { lib.close(); } catch (Exception e) { System.err.println("[WorldDraw.close] lib: " + e); }
@@ -115,7 +152,7 @@ public class WorldDraw {
         TextureManager textureManager = Minecraft.getInstance().getTextureManager();
         if (dynamicTexture == null || currentWidth != w || currentHeight != h) {
             if (dynamicTexture != null) textureManager.release(VIDEO_TEXTURE_ID);
-            dynamicTexture = new DynamicTexture(MOD_ID + ".stream", w, h, true);
+            dynamicTexture = new DynamicTexture(w, h, true);
             textureManager.register(VIDEO_TEXTURE_ID, dynamicTexture);
             currentWidth = w;
             currentHeight = h;
