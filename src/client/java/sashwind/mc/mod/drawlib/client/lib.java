@@ -5,8 +5,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.CompiledShaderProgram;
-import net.minecraft.client.renderer.CoreShaders;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -14,9 +12,7 @@ import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
-import org.lwjgl.system.MemoryUtil;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.logging.Logger;
 
@@ -76,9 +72,9 @@ public class lib {
             WAYPOINT_TEXTURE = dt;
         }
 
-        // 如果包含视频纹理且为 QUADS，使用基于 CoreShaders 的带深度测试的纹理 RenderType
+        // 如果包含视频纹理且为 QUADS，使用原版内置 text(ResourceLocation) RenderType（带深度测试且 Iris/Oculus 完全支持）
         if (!VFM.isLine() && waypointTextureId != null) {
-            renderType = RenderType.guiTextured(waypointTextureId);
+            renderType = RenderType.text(waypointTextureId);
         }
 
         renderWaypoint(context);
@@ -114,14 +110,18 @@ public class lib {
     public void renderFilledBox(Matrix4f positionMatrix, BufferBuilder buffer, float red, float green, float blue, float alpha) {
         if (closed) return;
         VertexFormat format = renderType.format();
-        boolean hasUv = format == DefaultVertexFormat.POSITION_TEX_COLOR || format == DefaultVertexFormat.POSITION_TEX;
-        boolean hasNormal = format == DefaultVertexFormat.POSITION_COLOR_NORMAL;
+        boolean hasUv = format.contains(VertexFormatElement.UV0);
+        boolean hasLight = format.contains(VertexFormatElement.UV2);
+        boolean hasNormal = format.contains(VertexFormatElement.NORMAL);
 
         for (Vertex v : vertices) {
             VertexConsumer consumer = buffer.addVertex(positionMatrix, v.x, v.y, v.z)
                     .setColor(v.r, v.g, v.b, v.a);
             if (hasUv) {
                 consumer.setUv(v.u, v.v);
+            }
+            if (hasLight) {
+                consumer.setLight(v.light);
             }
             if (hasNormal) {
                 consumer.setNormal(v.nx, v.ny, v.nz);
@@ -135,7 +135,7 @@ public class lib {
         if (builtBuffer == null) return;
 
         if (type.sortOnUpload()) {
-            builtBuffer.sortQuads(ALLOCATOR, RenderSystem.getProjectionType().vertexSorting());
+            builtBuffer.sortQuads(ALLOCATOR, RenderSystem.getVertexSorting());
         }
 
         type.draw(builtBuffer);
@@ -146,13 +146,13 @@ public class lib {
         client.setScreen(screen);
     }
 
-    public record WaypointRenderState(int x, int y, int z, float r, float b, float g, float a) {}
+    public record WaypointRenderState(int x, int y, int z, float r, float g, float b, float a) {}
 
     private NativeImage createPlaceholderImage(int width, int height) {
         NativeImage img = new NativeImage(NativeImage.Format.RGBA, width, height, false);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                img.setPixel(x, y, 0xFFFFFFFF);
+                img.setPixelRGBA(x, y, 0xFFFFFFFF);
             }
         }
         return img;

@@ -163,29 +163,32 @@ public class WorldDraw {
         NativeImage nativeImage = new NativeImage(NativeImage.Format.RGBA, w, h, false);
         int pixelCount = w * h;
         if (image == null || image.length == 0 || image[0] == null) return nativeImage;
-        int[] pixels = nativeImage.getPixels();
         Buffer srcBuf = image[0];
         IntBuffer srcIntBuf;
         if (srcBuf instanceof IntBuffer ib) srcIntBuf = ib;
         else if (srcBuf instanceof ByteBuffer bb) srcIntBuf = bb.asIntBuffer();
         else return nativeImage;
         srcIntBuf.rewind();
-        IntBuffer dstIntBuf = IntBuffer.wrap(pixels);
-        if (swapRB) {
-            int[] temp = new int[pixelCount];
-            srcIntBuf.get(temp, 0, Math.min(pixelCount, srcIntBuf.remaining()));
-            for (int i = 0; i < pixelCount && i < temp.length; i++) {
-                int val = temp[i];
-                int r = (val >>> 16) & 0xFF;
-                int g = (val >>> 8) & 0xFF;
-                int b = val & 0xFF;
-                pixels[i] = (0xFF << 24) | (b << 16) | (g << 8) | r; // 强制 alpha=255
-            }
-        } else {
-            dstIntBuf.put(srcIntBuf);
-            // 强制所有像素 alpha=255（视频帧不含有效透明通道，避免黑边透底）
-            for (int i = 0; i < pixelCount; i++) {
-                pixels[i] = pixels[i] | 0xFF000000;
+
+        long dstPtr = getNativeImagePointer(nativeImage);
+        if (dstPtr != 0L) {
+            IntBuffer dstIntBuf = org.lwjgl.system.MemoryUtil.memIntBuffer(dstPtr, pixelCount);
+            if (swapRB) {
+                int[] temp = new int[pixelCount];
+                srcIntBuf.get(temp, 0, Math.min(pixelCount, srcIntBuf.remaining()));
+                for (int i = 0; i < pixelCount && i < temp.length; i++) {
+                    int val = temp[i];
+                    int r = (val >>> 16) & 0xFF;
+                    int g = (val >>> 8) & 0xFF;
+                    int b = val & 0xFF;
+                    dstIntBuf.put(i, (0xFF << 24) | (b << 16) | (g << 8) | r); // 强制 alpha=255
+                }
+            } else {
+                dstIntBuf.put(srcIntBuf);
+                // 强制所有像素 alpha=255（视频帧不含有效透明通道，避免黑边透底）
+                for (int i = 0; i < pixelCount; i++) {
+                    dstIntBuf.put(i, dstIntBuf.get(i) | 0xFF000000);
+                }
             }
         }
         return nativeImage;
