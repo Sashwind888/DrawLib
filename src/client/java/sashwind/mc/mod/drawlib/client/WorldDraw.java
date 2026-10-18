@@ -27,7 +27,7 @@ public class WorldDraw {
     private final ResourceLocation VIDEO_TEXTURE_ID;
 
     public WorldDraw(int x, int y, int z, TopologyCompat topo) {
-        VIDEO_TEXTURE_ID = ResourceLocation.fromNamespaceAndPath(MOD_ID, "stream_" + TEXTURE_ID_COUNTER.getAndIncrement());
+        VIDEO_TEXTURE_ID = new ResourceLocation(MOD_ID, "stream_" + TEXTURE_ID_COUNTER.getAndIncrement());
         lib = new lib(x, y, z, topo);
     }
 

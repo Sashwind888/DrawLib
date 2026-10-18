@@ -52,8 +52,7 @@ public class lib {
         waypointState = new WaypointRenderState(POSx, POSy, POSz, 1f, 1f, 1f, 1f);
     }
 
-    public final ByteBufferBuilder ALLOCATOR = new ByteBufferBuilder(RenderType.SMALL_BUFFER_SIZE);
-    public BufferBuilder buffer;
+    public BufferBuilder buffer = new BufferBuilder(RenderType.SMALL_BUFFER_SIZE);
     // 保持字段兼容，避免旧引用报 NoSuchFieldError
     public Object vertexBuffer = null;
 
@@ -61,7 +60,7 @@ public class lib {
         if (closed) return;
         extractWaypoint();
         if (WAYPOINT_TEXTURE == null) {
-            waypointTextureId = ResourceLocation.fromNamespaceAndPath(MOD_ID, "_placeholder" + PLACEHOLDER_COUNTER.getAndIncrement());
+            waypointTextureId = new ResourceLocation(MOD_ID, "_placeholder" + PLACEHOLDER_COUNTER.getAndIncrement());
             TextureManager textureManager = Minecraft.getInstance().getTextureManager();
             DynamicTexture dt = new DynamicTexture(1, 1, true);
             textureManager.register(waypointTextureId, dt);
@@ -83,16 +82,11 @@ public class lib {
 
     public void renderWaypoint(WorldRenderContext context) {
         if (closed) return;
-        try {
-            ALLOCATOR.clear();
-        } catch (IllegalStateException e) {
-            Logger.getLogger("WorldDraw -> lib").warning("ALLOCATOR已被 clear！");
-            buffer = null;
+        if (vertices.isEmpty() || WAYPOINT_TEXTURE == null) {
             return;
         }
-        if (vertices.isEmpty() || WAYPOINT_TEXTURE == null) {
-            buffer = null;
-            return;
+        if (buffer.building()) {
+            buffer.clear();
         }
         PoseStack matrices = context.matrixStack();
         Vec3 camera = context.camera().getPosition();
@@ -101,7 +95,7 @@ public class lib {
 
         VertexFormat.Mode mode = renderType.mode();
         VertexFormat format = renderType.format();
-        buffer = new BufferBuilder(ALLOCATOR, mode, format);
+        buffer.begin(mode, format);
 
         renderFilledBox(matrices.last().pose(), buffer, waypointState.r(), waypointState.g(), waypointState.b(), waypointState.a());
         matrices.popPose();
@@ -110,36 +104,37 @@ public class lib {
     public void renderFilledBox(Matrix4f positionMatrix, BufferBuilder buffer, float red, float green, float blue, float alpha) {
         if (closed) return;
         VertexFormat format = renderType.format();
-        boolean hasUv = format.contains(VertexFormatElement.UV0);
-        boolean hasLight = format.contains(VertexFormatElement.UV2);
-        boolean hasNormal = format.contains(VertexFormatElement.NORMAL);
+        boolean hasUv = false;
+        boolean hasLight = false;
+        boolean hasNormal = false;
+        for (VertexFormatElement elem : format.getElements()) {
+            if (elem.getUsage() == VertexFormatElement.Usage.UV) {
+                if (elem.getIndex() == 0) hasUv = true;
+                else if (elem.getIndex() == 2) hasLight = true;
+            } else if (elem.getUsage() == VertexFormatElement.Usage.NORMAL) {
+                hasNormal = true;
+            }
+        }
 
         for (Vertex v : vertices) {
-            VertexConsumer consumer = buffer.addVertex(positionMatrix, v.x, v.y, v.z)
-                    .setColor(v.r, v.g, v.b, v.a);
+            buffer.vertex(positionMatrix, v.x, v.y, v.z)
+                    .color(v.r, v.g, v.b, v.a);
             if (hasUv) {
-                consumer.setUv(v.u, v.v);
+                buffer.uv(v.u, v.v);
             }
             if (hasLight) {
-                consumer.setLight(v.light);
+                buffer.uv2(v.light);
             }
             if (hasNormal) {
-                consumer.setNormal(v.nx, v.ny, v.nz);
+                buffer.normal(v.nx, v.ny, v.nz);
             }
+            buffer.endVertex();
         }
     }
 
     public void drawWaypoint(Minecraft client, RenderType type) {
-        if (closed || vertices.isEmpty() || WAYPOINT_TEXTURE == null || buffer == null) return;
-        MeshData builtBuffer = buffer.build();
-        if (builtBuffer == null) return;
-
-        if (type.sortOnUpload()) {
-            builtBuffer.sortQuads(ALLOCATOR, RenderSystem.getVertexSorting());
-        }
-
-        type.draw(builtBuffer);
-        builtBuffer.close();
+        if (closed || vertices.isEmpty() || WAYPOINT_TEXTURE == null || !buffer.building()) return;
+        type.end(buffer, RenderSystem.getVertexSorting());
     }
 
     public static void setScreenCompat(Minecraft client, net.minecraft.client.gui.screens.Screen screen) {
@@ -161,7 +156,7 @@ public class lib {
     public void close() {
         if (closed) return;
         closed = true;
-        try { if (ALLOCATOR != null) ALLOCATOR.close(); } catch (Exception e) {}
+        try { if (buffer != null && buffer.building()) buffer.clear(); } catch (Exception e) {}
         if (vertices != null) vertices.clear();
         if (waypointTextureId != null && WAYPOINT_TEXTURE != null) {
             try { Minecraft.getInstance().getTextureManager().release(waypointTextureId); } catch (Exception e) {}
@@ -169,7 +164,6 @@ public class lib {
         }
         WAYPOINT_TEXTURE = null;
         waypointTextureId = null;
-        buffer = null;
     }
 
     public static void cleanupStatics() {
